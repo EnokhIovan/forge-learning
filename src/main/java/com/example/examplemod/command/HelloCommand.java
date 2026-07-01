@@ -9,11 +9,12 @@ import com.mojang.brigadier.arguments.FloatArgumentType;
 import net.minecraft.server.level.ServerPlayer;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import net.minecraft.commands.arguments.EntityArgument;
 
 import javax.swing.*;
+import java.util.Collection;
 
 public class HelloCommand {
-
   public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
     dispatcher.register(
       Commands.literal("halo")
@@ -29,39 +30,6 @@ public class HelloCommand {
           return 1;
         })
       )
-    );
-
-    dispatcher.register(
-      Commands.literal("hai")
-        .executes(context -> {
-          context.getSource().sendSuccess(
-            () -> Component.literal("Hai " + context.getSource().getTextName() + "!"),
-            false
-          );
-          return 1;
-        })
-    );
-
-    dispatcher.register(
-      Commands.literal("bye")
-        .executes(context -> {
-          context.getSource().sendSuccess(
-            () -> Component.literal("Sampai jumpa " + context.getSource().getTextName() + "!"),
-            false
-          );
-          return 1;
-        })
-    );
-
-    dispatcher.register(
-      Commands.literal("halo2")
-        .executes(context -> {
-          context.getSource().sendSuccess(
-            () -> Component.literal("Halo " + context.getSource().getTextName() + "!\nSelamat datang di mod pertamamu"),
-            false
-          );
-          return 1;
-        })
     );
 
     dispatcher.register(
@@ -106,39 +74,56 @@ public class HelloCommand {
       Commands.literal("heal")
       .executes(context -> {
         ServerPlayer player = context.getSource().getPlayerOrException();
-        return heal(context, player.getHealth()*0.2f);
+        return heal(context, player, player.getHealth()*0.2f);
       })
       .then(
         Commands.argument("amount", FloatArgumentType.floatArg())
         .executes(context -> {
           ServerPlayer player = context.getSource().getPlayerOrException();
           float amount = FloatArgumentType.getFloat(context, "amount");
-          return heal(context, amount);
+          return heal(context, player, amount);
         })
+      )
+      .then(
+        Commands.argument("target", EntityArgument.players())
+        .executes(context -> {
+          Collection<ServerPlayer> players = EntityArgument.getPlayers(context, "target");
+
+          for(ServerPlayer player : players)
+            heal(context, player, player.getHealth()*0.2f);
+
+          return 1;
+        })
+        .then(
+          Commands.argument("amount", FloatArgumentType.floatArg())
+          .executes(context -> {
+            Collection<ServerPlayer> players = EntityArgument.getPlayers(context, "target");
+            float amount = FloatArgumentType.getFloat(context, "amount");
+
+            for(ServerPlayer player : players)
+              heal(context, player, amount);
+            return 1;
+          })
+        )
       )
     );
   }
 
-  private static int heal(CommandContext<CommandSourceStack> context, float amount)
+  private static int heal(CommandContext<CommandSourceStack> context, ServerPlayer player, float amount)
     throws CommandSyntaxException {
+      float hpBefore = player.getHealth();
 
-    ServerPlayer player = context.getSource().getPlayerOrException();
+      player.setHealth(
+        Math.min(hpBefore + amount, player.getMaxHealth())
+      );
 
-    float hpBefore = player.getHealth();
+      context.getSource().sendSuccess(
+        () -> Component.literal(
+          player.getName().getString() + " telah dipulihkan sebanyak " + (player.getHealth()-hpBefore) + " HP!"
+        ),
+        false
+      );
 
-    player.setHealth(
-      Math.min(hpBefore + amount, player.getMaxHealth())
-    );
-
-    context.getSource().sendSuccess(
-      () -> Component.literal(
-        "Halo " + context.getSource().getTextName()
-          + "!\nDarahmu telah bertambah "
-          + String.format("%.2f", player.getHealth() - hpBefore)
-      ),
-      false
-    );
-
-    return 1;
-  }
+      return 1;
+    }
 }
