@@ -41,7 +41,8 @@ public class HelloCommand {
           String[] attributes = {
             "health",
             "hunger",
-            "level"
+            "level",
+            "xp_progress"
           };
 
           for(String attribute : attributes){
@@ -56,6 +57,7 @@ public class HelloCommand {
             case "health" -> "HP: " + String.format("%.2f",player.getHealth());
             case "hunger" -> "Hunger: %d".formatted(player.getFoodData().getFoodLevel());
             case "level" -> "Level: %d".formatted(player.experienceLevel);
+            case "xp_progress" -> "XP Progress: %.2f".formatted(player.experienceProgress);
             default -> {
               context.getSource().sendFailure(
                 Component.literal("Maaf, attribut tidak dikenali!")
@@ -132,6 +134,48 @@ public class HelloCommand {
             )
         )
     );
+
+    dispatcher.register(
+      Commands.literal("level")
+        .then(
+          Commands.argument("action", StringArgumentType.word())
+            .suggests((context, builder) -> {
+              String[] actions = {
+                "give",
+                "reset"
+              };
+
+              for(String action : actions)
+                builder.suggest(action);
+
+              return builder.buildFuture();
+            })
+            .then(
+              Commands.argument("target", EntityArgument.players())
+                .executes(context -> {
+                  Collection<ServerPlayer> players = EntityArgument.getPlayers(context, "target");
+
+                  for(ServerPlayer player : players)
+                    level(context, player, 0, "reset");
+
+                  return 1;
+                })
+                .then(
+                  Commands.argument("amount", IntegerArgumentType.integer())
+                    .executes(context -> {
+                      Collection<ServerPlayer> players = EntityArgument.getPlayers(context, "target");
+                      String action = StringArgumentType.getString(context, "action");
+                      Integer amount = IntegerArgumentType.getInteger(context, "amount");
+
+                      for(ServerPlayer player : players)
+                        level(context, player, amount, action);
+
+                      return 1;
+                    })
+                )
+            )
+        )
+    );
   }
 
   private static int heal(CommandContext<CommandSourceStack> context, ServerPlayer player, float amount)
@@ -168,4 +212,28 @@ public class HelloCommand {
 
       return 1;
     }
+
+  private static int level(CommandContext<CommandSourceStack> context, ServerPlayer player, int amount, String action)
+    throws CommandSyntaxException {
+      switch (action){
+        case "give":
+          player.giveExperienceLevels(amount);
+          break;
+        case "reset":
+          player.setExperienceLevels(0);
+          player.setExperiencePoints(0);
+          break;
+      }
+
+      context.getSource().sendSuccess(
+        () -> Component.literal(
+          (action.equals("give")) ?
+          player.getName().getString() + " telah bertambah sebanyak " + amount +" level!" :
+            player.getName().getString() + " mendapatkan reset level!"
+        ),
+        false
+      );
+
+      return 1;
+  }
 }
